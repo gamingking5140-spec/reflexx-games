@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ReflexX</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.app {
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+}
+
+h1 { margin: 0; }
+
+.score-box {
+  display: flex;
+  justify-content: space-between;
+  margin: 10px 0;
+  background: rgba(255,255,255,0.05);
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.challenge {
+  margin-top: 10px;
+  padding: 8px;
+  background: rgba(34,197,94,0.15);
+  border-radius: 10px;
+}
+
+.game-area {
+  height: 200px;
+  background: #334155;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 15px;
+  margin: 15px 0;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: #22c55e;
+  font-weight: bold;
+}
+
+.name-box {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.name-box input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+}
+</style>
+
+</head>
+<body>
+
+<div class="app">
+
+<h1>ReflexX ⚡</h1>
+
+<div class="score-box">
+  <p>Level: <span id="level">1</span></p>
+  <p>XP: <span id="xp">0</span></p>
+</div>
+
+<div class="score-box">
+  <p>Best: <span id="best">0.000</span></p>
+  <p>Last: <span id="last">0.000</span></p>
+</div>
+
+<div class="score-box">
+  <p>🔥 Streak: <span id="streak">0</span></p>
+</div>
+
+<div class="challenge" id="challengeText"></div>
+
+<div class="name-box">
+  <input id="nameInput" placeholder="Enter name">
+  <button onclick="saveName()">Start</button>
+</div>
+
+<div id="game" class="game-area">
+  <p id="text">Enter name to start</p>
+</div>
+
+<button onclick="startGame()">Play</button>
+
+</div>
+
+<script>
+
+// DOM CACHE
+const gameBox = document.getElementById("game");
+const text = document.getElementById("text");
+const bestEl = document.getElementById("best");
+const lastEl = document.getElementById("last");
+const xpEl = document.getElementById("xp");
+const levelEl = document.getElementById("level");
+const streakEl = document.getElementById("streak");
+const challengeEl = document.getElementById("challengeText");
+
+// SOUND
+const tapSound = new Audio("https://www.soundjay.com/buttons/sounds/button-16.mp3");
+const winSound = new Audio("https://www.soundjay.com/buttons/sounds/button-3.mp3");
+const loseSound = new Audio("https://www.soundjay.com/buttons/sounds/button-10.mp3");
+[tapSound, winSound, loseSound].forEach(s => s.load());
+
+// VIBRATION
+const vibrate = ms => navigator.vibrate && navigator.vibrate(ms);
+
+// STATE
+let startTime = 0, timeout, active = false, tapped = false;
+let player = localStorage.getItem("name") || "";
+let best = parseFloat(localStorage.getItem("best")) || null;
+
+let xp = parseInt(localStorage.getItem("xp")) || 0;
+let level = parseInt(localStorage.getItem("level")) || 1;
+let streak = parseInt(localStorage.getItem("streak")) || 0;
+let lastPlay = localStorage.getItem("lastPlay") || "";
+
+// 🔥 DAILY CHALLENGE (same for everyone)
+let todaySeed = new Date().toDateString();
+let seedNum = todaySeed.split("").reduce((a,b)=>a+b.charCodeAt(0),0);
+let challengeTarget = +(0.2 + (seedNum % 200)/1000).toFixed(3);
+
+challengeEl.textContent = "🎯 Today Challenge: " + challengeTarget + "s";
+
+// INIT UI
+if(best) bestEl.textContent = best.toFixed(3);
+xpEl.textContent = xp;
+levelEl.textContent = level;
+streakEl.textContent = streak;
+
+// NAME
+function saveName() {
+  let input = document.getElementById("nameInput").value.trim();
+  if(!input) return alert("Enter name");
+
+  player = input;
+  localStorage.setItem("name", player);
+  text.textContent = "Press Play";
+}
+
+// START
+function startGame() {
+  if(!player) return alert("Enter name first");
+
+  text.textContent = "Wait...";
+  gameBox.style.background = "red";
+
+  active = false;
+  tapped = false;
+
+  let delay = Math.random()*3000 + 2000;
+
+  timeout = setTimeout(() => {
+    gameBox.style.background = "green";
+    text.textContent = "TAP!";
+    startTime = performance.now();
+    active = true;
+  }, delay);
+}
+
+// TAP HANDLER
+function handleTap() {
+
+  if(tapped) return;
+  tapped = true;
+
+  if(!active) {
+    clearTimeout(timeout);
+    loseSound.currentTime = 0;
+    loseSound.play();
+    vibrate(200);
+
+    text.textContent = "Too early 😅";
+    gameBox.style.background = "#334155";
+
+    return autoRestart();
+  }
+
+  tapSound.currentTime = 0;
+  tapSound.play();
+  vibrate(50);
+
+  let time = (performance.now() - startTime)/1000;
+
+  lastEl.textContent = time.toFixed(3);
+
+  if(!best || time < best) {
+    best = time;
+    localStorage.setItem("best", best);
+    bestEl.textContent = best.toFixed(3);
+
+    winSound.currentTime = 0;
+    winSound.play();
+    vibrate(300);
+  }
+
+  let earnedXP = time < 0.20 ? 50 :
+                 time < 0.30 ? 30 :
+                 time < 0.50 ? 20 : 10;
+
+  if(time < challengeTarget) {
+    earnedXP += 50;
+    challengeEl.textContent = "🔥 Challenge Completed!";
+  }
+
+  xp += earnedXP;
+
+  if(xp >= level * 100) {
+    xp -= level * 100;
+    level++;
+  }
+
+  localStorage.setItem("xp", xp);
+  localStorage.setItem("level", level);
+
+  let today = new Date().toDateString();
+  if(lastPlay !== today) {
+    let yesterday = new Date(Date.now()-86400000).toDateString();
+    streak = (lastPlay === yesterday) ? streak+1 : 1;
+
+    localStorage.setItem("streak", streak);
+    localStorage.setItem("lastPlay", today);
+  }
+
+  let msg =
+    time < 0.20 ? "INSANE ⚡" :
+    time < 0.30 ? "FAST 🔥" :
+    time < 0.50 ? "GOOD 👍" :
+                  "TOO SLOW 😅";
+
+  text.textContent =
+    `${player}: ${time.toFixed(3)}s | ${msg} | +${earnedXP}XP`;
+
+  gameBox.style.background = "#334155";
+  gameBox.style.transform = "scale(0.95)";
+  setTimeout(() => gameBox.style.transform = "scale(1)", 80);
+
+  active = false;
+
+  xpEl.textContent = xp;
+  levelEl.textContent = level;
+  streakEl.textContent = streak;
+
+  // 🔥 SHARE TRIGGER
+  if(time < 0.30) {
+    setTimeout(() => shareScore(time), 800);
+  }
+
+  autoRestart();
+}
+
+// AUTO RESTART
+function autoRestart() {
+  setTimeout(() => startGame(), 1200);
+}
+
+// SHARE
+function shareScore(time) {
+  let msg = `⚡ I got ${time.toFixed(3)}s in ReflexX! Beat me!`;
+
+  if(navigator.share) {
+    navigator.share({
+      title: "ReflexX Challenge",
+      text: msg,
+      url: window.location.href
+    });
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+  }
+}
+
+// FAST INPUT
+gameBox.addEventListener("touchstart", handleTap);
+gameBox.addEventListener("click", handleTap);
+
+</script>
+
+</body>
+</html>
